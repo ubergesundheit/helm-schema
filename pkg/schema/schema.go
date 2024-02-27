@@ -343,6 +343,7 @@ func YamlToSchema(
 	node *yaml.Node,
 	keepFullComment bool,
 	dontRemoveHelmDocsPrefix bool,
+	omitAdditionalProperties bool,
 	parentRequiredProperties *[]string,
 ) Schema {
 	var schema Schema
@@ -361,6 +362,7 @@ func YamlToSchema(
 			node.Content[0],
 			keepFullComment,
 			dontRemoveHelmDocsPrefix,
+			omitAdditionalProperties,
 			&requiredProperties,
 		).Properties
 
@@ -379,8 +381,9 @@ func YamlToSchema(
 		if len(requiredProperties) > 0 {
 			schema.RequiredProperties = requiredProperties
 		}
-		// always disable on top level
-		schema.AdditionalProperties = new(bool)
+		if !omitAdditionalProperties {
+			schema.AdditionalProperties = new(bool)
+		}
 	case yaml.MappingNode:
 		for i := 0; i < len(node.Content); i += 2 {
 			keyNode := node.Content[i]
@@ -422,7 +425,7 @@ func YamlToSchema(
 				*parentRequiredProperties = append(*parentRequiredProperties, keyNode.Value)
 			}
 
-			if valueNode.Kind == yaml.MappingNode &&
+			if !omitAdditionalProperties && valueNode.Kind == yaml.MappingNode &&
 				(!keyNodeSchema.HasData || keyNodeSchema.AdditionalProperties == nil) {
 				keyNodeSchema.AdditionalProperties = new(bool)
 			}
@@ -449,6 +452,7 @@ func YamlToSchema(
 					valueNode,
 					keepFullComment,
 					dontRemoveHelmDocsPrefix,
+					omitAdditionalProperties,
 					&requiredProperties,
 				).Properties
 				if len(requiredProperties) > 0 {
@@ -467,13 +471,13 @@ func YamlToSchema(
 						seqSchema.AnyOf = append(seqSchema.AnyOf, &Schema{Type: itemNodeType})
 					} else {
 						itemRequiredProperties := []string{}
-						itemSchema := YamlToSchema(itemNode, keepFullComment, dontRemoveHelmDocsPrefix, &itemRequiredProperties)
+						itemSchema := YamlToSchema(itemNode, keepFullComment, dontRemoveHelmDocsPrefix, omitAdditionalProperties, &itemRequiredProperties)
 
 						if len(itemRequiredProperties) > 0 {
 							itemSchema.RequiredProperties = itemRequiredProperties
 						}
 
-						if itemNode.Kind == yaml.MappingNode && (!itemSchema.HasData || itemSchema.AdditionalProperties == nil) {
+						if !omitAdditionalProperties && itemNode.Kind == yaml.MappingNode && (!itemSchema.HasData || itemSchema.AdditionalProperties == nil) {
 							itemSchema.AdditionalProperties = new(bool)
 						}
 
